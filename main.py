@@ -7,15 +7,23 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 import json, os, shutil, uuid, hashlib
 
-# --- تنظیمات دیتابیس ---
-SQLALCHEMY_DATABASE_URL = "sqlite:///./chat.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+# --- تنظیمات دیتابیس (سازگار با Render و لوکال) ---
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./chat.db")
+
+# اصلاح آدرس دیتابیس برای Render (که با postgres:// شروع می‌شود)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# تنظیمات connect_args فقط برای SQLite لازم است
+connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 os.makedirs("uploads", exist_ok=True)
 
-# --- توابع هش کردن رمز (بدون passlib، بدون خطا) ---
+# --- توابع هش کردن رمز (بدون passlib) ---
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -116,13 +124,22 @@ async def login(request: Request, username: str = Form(...), password: str = For
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
     user_id = request.cookies.get("user_id")
-    if not user_id: return RedirectResponse(url="/", status_code=303)
+    if not user_id: 
+        return RedirectResponse(url="/", status_code=303)
 
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == int(user_id)).first()
+        
+        # ✅ بررسی وجود کاربر (رفع خطای NoneType)
+        if user is None:
+            response = RedirectResponse(url="/", status_code=303)
+            response.delete_cookie("user_id")
+            return response
+        
         admin = db.query(User).filter(User.is_admin == 1).first()
         admin_id = admin.id if admin else 1
+        
         messages = db.query(Message).filter(
             ((Message.sender_id == user.id) & (Message.receiver_id == admin_id)) |
             ((Message.sender_id == admin_id) & (Message.receiver_id == user.id))
@@ -137,12 +154,18 @@ async def chat_page(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     user_id = request.cookies.get("user_id")
-    if not user_id: return RedirectResponse(url="/", status_code=303)
+    if not user_id: 
+        return RedirectResponse(url="/", status_code=303)
 
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.id == int(user_id)).first()
-        if not admin or admin.is_admin != 1: return RedirectResponse(url="/chat", status_code=303)
+        
+        # ✅ بررسی وجود ادمین (رفع خطای احتمالی)
+        if not admin or admin.is_admin != 1: 
+            response = RedirectResponse(url="/", status_code=303)
+            response.delete_cookie("user_id")
+            return response
 
         if not admin.password:
             return RedirectResponse(url="/set_password", status_code=303)
