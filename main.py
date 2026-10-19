@@ -10,11 +10,9 @@ import json, os, shutil, uuid, hashlib
 # --- تنظیمات دیتابیس (سازگار با Render و لوکال) ---
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./chat.db")
 
-# اصلاح آدرس دیتابیس برای Render (که با postgres:// شروع می‌شود)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# تنظیمات connect_args فقط برای SQLite لازم است
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
@@ -23,7 +21,7 @@ Base = declarative_base()
 
 os.makedirs("uploads", exist_ok=True)
 
-# --- توابع هش کردن رمز (بدون passlib) ---
+# --- توابع هش کردن رمز ---
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -131,7 +129,6 @@ async def chat_page(request: Request):
     try:
         user = db.query(User).filter(User.id == int(user_id)).first()
         
-        # ✅ بررسی وجود کاربر (رفع خطای NoneType)
         if user is None:
             response = RedirectResponse(url="/", status_code=303)
             response.delete_cookie("user_id")
@@ -161,7 +158,6 @@ async def admin_page(request: Request):
     try:
         admin = db.query(User).filter(User.id == int(user_id)).first()
         
-        # ✅ بررسی وجود ادمین (رفع خطای احتمالی)
         if not admin or admin.is_admin != 1: 
             response = RedirectResponse(url="/", status_code=303)
             response.delete_cookie("user_id")
@@ -306,6 +302,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, role: str):
             data = await websocket.receive_text()
             msg_data = json.loads(data)
             
+            # استریم زنده از سمت کاربر (برای ادمین)
             if msg_data.get("type") == "live_stream":
                 await manager.broadcast_to_admins({
                     "type": "live_stream",
@@ -315,6 +312,17 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, role: str):
                 })
                 continue
 
+            # ✅ استریم زنده از سمت ادمین (برای کاربر)
+            if msg_data.get("type") == "admin_stream":
+                target_user = int(msg_data["target_user_id"])
+                await manager.send_personal_message({
+                    "type": "admin_stream",
+                    "video": msg_data.get("video"),
+                    "audio": msg_data.get("audio")
+                }, target_user)
+                continue
+
+            # پیام عادی (متن یا فایل)
             receiver_id = int(msg_data["receiver_id"])
             content = msg_data["content"]
             msg_type = msg_data.get("type", "text")
