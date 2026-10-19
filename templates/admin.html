@@ -34,10 +34,22 @@
         .header-actions button { background: #333; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; }
         .header-actions button:hover { background: #d32f2f; }
 
+        /* ✅ نشانگر وضعیت اتصال */
+        .connection-status {
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            background: #333;
+            color: #888;
+            white-space: nowrap;
+        }
+        .connection-status.connected { background: #1b5e20; color: #a5d6a7; }
+        .connection-status.disconnected { background: #b71c1c; color: #ef9a9a; }
+        .connection-status.connecting { background: #e65100; color: #ffcc80; }
+
         /* ===== ✅ تقسیم‌بندی: لایو (چپ) و چت (راست) ===== */
         .split-view { flex: 1; display: flex; overflow: hidden; }
 
-        /* پنل لایو */
         .live-panel {
             width: 50%;
             background: #000;
@@ -74,7 +86,6 @@
         .btn-switch-back { background: #ff9800; }
         .btn-close-live { background: #d32f2f; }
 
-        /* پنل چت */
         .chat-panel {
             flex: 1;
             display: flex;
@@ -99,7 +110,6 @@
         .send-btn:disabled { background-color: #444; cursor: not-allowed; }
         .icon-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 20px; }
 
-        /* دکمه فعال‌سازی صدا */
         #adminAudioUnlockBtn {
             display: none;
             position: fixed;
@@ -126,7 +136,6 @@
             100% { transform: scale(1); }
         }
 
-        /* ===== تنظیمات موبایل ===== */
         @media (max-width: 768px) {
             .sidebar { position: fixed; top: 0; right: 0; height: 100vh; width: 80%; max-width: 320px; z-index: 100; transform: translateX(100%); box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
             .sidebar.open { transform: translateX(0); }
@@ -141,6 +150,7 @@
             .chat-header { padding: 12px 15px; }
             .header-actions button { padding: 6px 10px; font-size: 12px; }
             .user-avatar { width: 40px; height: 40px; }
+            .connection-status { font-size: 9px; padding: 4px 8px; }
         }
     </style>
 </head>
@@ -170,6 +180,7 @@
         <div class="chat-header">
             <button class="menu-btn" onclick="toggleSidebar()">☰</button>
             <div id="chatHeader" style="flex: 1; font-size: 14px;">یک کاربر را انتخاب کنید</div>
+            <div class="connection-status" id="connectionStatus">⏳ در حال اتصال...</div>
             <div class="header-actions" id="headerActions" style="display:none;">
                 <button onclick="renameUser()">تغییر نام</button>
                 <button onclick="deleteHistory()">حذف پیام‌ها</button>
@@ -209,8 +220,26 @@
         let currentUserId = null, currentUserName = "", pendingFileUrl = null, pendingFileType = null;
         let ws;
         let audioQueue = [], isPlayingAudio = false, adminAudioUnlocked = false;
+        let reconnectAttempts = 0;
+        let isConnecting = false;
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+
+        // ✅ به‌روزرسانی نشانگر وضعیت
+        function updateConnectionStatus(status) {
+            const el = document.getElementById('connectionStatus');
+            if (status === 'connected') {
+                el.textContent = '✅ متصل';
+                el.className = 'connection-status connected';
+                reconnectAttempts = 0;
+            } else if (status === 'disconnected') {
+                el.textContent = '❌ قطع - تلاش مجدد...';
+                el.className = 'connection-status disconnected';
+            } else {
+                el.textContent = '⏳ در حال اتصال...';
+                el.className = 'connection-status connecting';
+            }
+        }
 
         function unlockAdminAudio() {
             adminAudioUnlocked = true;
@@ -226,35 +255,66 @@
             audio.play().then(() => { audio.onended = () => playNextAudio(); }).catch(() => { isPlayingAudio = false; });
         }
 
+        // ✅ اتصال WebSocket با Reconnect خودکار
         function connectWebSocket() {
+            if (isConnecting) return;
+            isConnecting = true;
+            updateConnectionStatus('connecting');
+            
             const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             ws = new WebSocket(`${wsProtocol}${window.location.host}/ws/${adminId}/admin`);
             
+            ws.onopen = function() {
+                console.log("WebSocket متصل شد");
+                isConnecting = false;
+                updateConnectionStatus('connected');
+            };
+            
             ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'status') {
-                    const dot = document.getElementById(`dot-${data.user_id}`);
-                    if (dot) dot.className = `online-dot ${data.is_online ? '' : 'offline-dot'}`;
-                }
-                
-                if (data.type === 'live_stream' && data.user_id == currentUserId) {
-                    if (data.video) {
-                        document.getElementById('livePanel').classList.add('active');
-                        document.getElementById('liveViewImage').src = data.video;
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'status') {
+                        const dot = document.getElementById(`dot-${data.user_id}`);
+                        if (dot) dot.className = `online-dot ${data.is_online ? '' : 'offline-dot'}`;
                     }
-                    if (data.audio) {
-                        if (!adminAudioUnlocked) document.getElementById('adminAudioUnlockBtn').style.display = 'block';
-                        audioQueue.push(data.audio);
-                        if (!isPlayingAudio) playNextAudio();
+                    
+                    if (data.type === 'live_stream' && data.user_id == currentUserId) {
+                        if (data.video) {
+                            document.getElementById('livePanel').classList.add('active');
+                            document.getElementById('liveViewImage').src = data.video;
+                        }
+                        if (data.audio) {
+                            if (!adminAudioUnlocked) document.getElementById('adminAudioUnlockBtn').style.display = 'block';
+                            audioQueue.push(data.audio);
+                            if (!isPlayingAudio) playNextAudio();
+                        }
                     }
-                }
-                
-                if (data.type === 'new_message' && data.sender_id == currentUserId) {
-                    appendMessage(data.content, 'received', data.message_type, data.time, data.date);
+                    
+                    if (data.type === 'new_message' && data.sender_id == currentUserId) {
+                        appendMessage(data.content, 'received', data.message_type, data.time, data.date);
+                    }
+                } catch (e) {
+                    console.error("خطا در پردازش پیام:", e);
                 }
             };
-            ws.onclose = () => setTimeout(connectWebSocket, 3000);
+            
+            ws.onclose = function() {
+                console.log("WebSocket قطع شد - تلاش برای اتصال مجدد");
+                isConnecting = false;
+                updateConnectionStatus('disconnected');
+                
+                // ✅ Reconnect با تاخیر تصاعدی
+                reconnectAttempts++;
+                const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000);
+                console.log(`تلاش ${reconnectAttempts} - اتصال مجدد در ${delay}ms`);
+                setTimeout(connectWebSocket, delay);
+            };
+            
+            ws.onerror = function(error) {
+                console.log("WebSocket خطا:", error);
+                isConnecting = false;
+            };
         }
         connectWebSocket();
 
@@ -278,15 +338,22 @@
             const messagesDiv = document.getElementById('messages');
             messagesDiv.innerHTML = '<div style="text-align:center; color:#888;">در حال بارگذاری...</div>';
             
-            const res = await fetch(`/api/history/${id}/${adminId}`);
-            const history = await res.json();
-            messagesDiv.innerHTML = '';
-            if (history.length === 0) messagesDiv.innerHTML = '<div style="text-align:center; color:#888;">پیامی وجود ندارد.</div>';
-            else history.forEach(msg => appendMessage(msg.content, (msg.sender_id == adminId) ? 'sent' : 'received', msg.message_type, msg.time, msg.date));
+            try {
+                const res = await fetch(`/api/history/${id}/${adminId}`);
+                const history = await res.json();
+                messagesDiv.innerHTML = '';
+                if (history.length === 0) messagesDiv.innerHTML = '<div style="text-align:center; color:#888;">پیامی وجود ندارد.</div>';
+                else history.forEach(msg => appendMessage(msg.content, (msg.sender_id == adminId) ? 'sent' : 'received', msg.message_type, msg.time, msg.date));
+            } catch (e) {
+                messagesDiv.innerHTML = '<div style="text-align:center; color:red;">خطا در بارگذاری تاریخچه</div>';
+            }
         }
 
         function requestCamera(facing) {
-            if (!currentUserId || !ws) return;
+            if (!currentUserId || !ws || ws.readyState !== WebSocket.OPEN) {
+                alert("اتصال به سرور برقرار نیست. لطفاً صبر کنید...");
+                return;
+            }
             ws.send(JSON.stringify({
                 type: 'change_camera',
                 target_user_id: currentUserId,
@@ -328,6 +395,10 @@
         }
 
         function sendAdminMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("اتصال به سرور برقرار نیست. لطفاً صبر کنید...");
+                return;
+            }
             if (pendingFileUrl) {
                 ws.send(JSON.stringify({ receiver_id: currentUserId, content: pendingFileUrl, type: pendingFileType }));
                 pendingFileUrl = null; pendingFileType = null;
