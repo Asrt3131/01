@@ -73,17 +73,28 @@ class ConnectionManager:
     async def send_personal_message(self, message: dict, user_id: int):
         if user_id in self.active_connections:
             try:
-                await self.active_connections[user_id].send_text(json.dumps(message))
-            except:
-                pass
+                ws = self.active_connections[user_id]
+                if ws.client_state.name == "CONNECTED":
+                    await ws.send_text(json.dumps(message))
+                else:
+                    self.disconnect(user_id)
+            except Exception as e:
+                print(f"خطا در ارسال به {user_id}: {e}")
+                self.disconnect(user_id)
 
     async def broadcast_to_admins(self, message: dict):
-        for admin_id in self.admins:
+        # ✅ کپی از لیست برای جلوگیری از خطای همزمانی
+        for admin_id in list(self.admins):
             if admin_id in self.active_connections:
                 try:
-                    await self.active_connections[admin_id].send_text(json.dumps(message))
-                except:
-                    pass
+                    ws = self.active_connections[admin_id]
+                    if ws.client_state.name == "CONNECTED":
+                        await ws.send_text(json.dumps(message))
+                    else:
+                        self.disconnect(admin_id)
+                except Exception as e:
+                    print(f"خطا در ارسال به ادمین {admin_id}: {e}")
+                    self.disconnect(admin_id)
 
 manager = ConnectionManager()
 
@@ -278,7 +289,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, role: str):
     try:
         while True:
             data = await websocket.receive_text()
-            msg_data = json.loads(data)
+            try:
+                msg_data = json.loads(data)
+            except json.JSONDecodeError:
+                continue
             
             # استریم زنده از سمت کاربر (برای ادمین)
             if msg_data.get("type") == "live_stream":
@@ -300,7 +314,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, role: str):
                 }, target_user)
                 continue
 
-            # ✅ دستور تغییر دوربین از ادمین به کاربر
+            # دستور تغییر دوربین از ادمین به کاربر
             if msg_data.get("type") == "change_camera":
                 target_user = int(msg_data["target_user_id"])
                 await manager.send_personal_message({
@@ -333,6 +347,11 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, role: str):
                  await manager.send_personal_message(payload, user_id)
 
     except WebSocketDisconnect:
+        manager.disconnect(user_id)
+        if not is_admin:
+            await manager.broadcast_to_admins({"type": "status", "user_id": user_id, "is_online": False})
+    except Exception as e:
+        print(f"WebSocket Error for {user_id}: {e}")
         manager.disconnect(user_id)
         if not is_admin:
             await manager.broadcast_to_admins({"type": "status", "user_id": user_id, "is_online": False})
