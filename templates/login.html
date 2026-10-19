@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>ورود به سیستم</title>
+    <style>
+        body { background-color: #1a1a1a; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #2d2d2d; padding: 40px; border-radius: 12px; text-align: center; width: 300px; }
+        h1 { color: #4b8bbe; }
+        input { width: 90%; padding: 10px; margin: 15px 0; border-radius: 6px; border: 1px solid #444; background: #1a1a1a; color: white; }
+        button { background: #4b8bbe; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; }
+        button:hover { background: #3a6a92; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>DeepChat</h1>
+        <form action="/login" method="post">
+            <input type="text" name="username" placeholder="ایمیل یا شماره تلفن" required>
+            <button type="submit">ورود / ثبت‌نام</button>
+        </form>
+        <p style="font-size: 12px; color: #888; margin-top: 20px;">برای ساخت ادمین اولیه یک بار به آدرس /create_admin بروید.</p>
+    </div>
+</body>
+</html>
